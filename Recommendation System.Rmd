@@ -1,0 +1,188 @@
+---
+title: "Movie Recommendation System"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(data.table)
+```
+```{r}
+library(reshape2)
+```
+```{r}
+library(proxy)
+```
+```{r}
+library(ggplot2)
+```
+```{r}
+setwd("C:/Users/Aditya/OneDrive/Desktop/Movie Recommendation System 2")
+```
+
+```{r}
+movies<- read.csv("movies.csv",stringsAsFactors=FALSE)
+head(movies)
+str(movies)
+```
+```{r}
+ratings<- read.csv("ratings.csv")
+head(ratings)
+str(ratings)
+```
+```{r}
+genres <- as.data.frame(movies$genres, stringsAsFactors=FALSE)
+head(genres)
+```
+```{r}
+genres2 <- as.data.frame(tstrsplit(genres[,1], '[|]', type.convert=TRUE), stringsAsFactors=FALSE)
+head(genres2)
+```
+```{r}
+colnames(genres2) <- c(1:10)
+```
+
+```{r}
+genre_list <- c("Action", "Adventure", "Animation", "Children", "Comedy", "Crime","Documentary", "Drama", "Fantasy","Film-Noir", "Horror", "Musical", "Mystery","Romance","Sci-Fi", "Thriller", "War", "Western")
+```
+
+```{r}
+genre_matrix <- matrix(0,9743,18)
+head(genre_matrix)
+```
+```{r}
+genre_matrix[1,] <- genre_list
+```
+
+```{r}
+colnames(genre_matrix) <- genre_list
+head(genre_matrix)
+```
+```{r}
+for (i in 1:nrow(genres2)) {
+  for (c in 1:ncol(genres2)) {
+    genmat_col = which(genre_matrix[1,] == genres2[i,c])
+    genre_matrix[i+1,genmat_col] <- 1
+  }
+}
+```
+
+```{r}
+genre_matrix2 <- as.data.frame(genre_matrix[-1,], stringsAsFactors=FALSE)
+head(genre_matrix2)
+```
+
+```{r}
+for (c in 1:ncol(genre_matrix2)) {
+  genre_matrix2[,c] <- as.integer(genre_matrix2[,c])
+}
+```
+
+```{r}
+binaryratings <- ratings
+for (i in 1:nrow(binaryratings)){
+  if (binaryratings[i,3] > 3){
+    binaryratings[i,3] <- 1
+  }
+  else if (binaryratings[i,3] == 3){
+    binaryratings[i,3] <- 0
+  }
+  else {
+    binaryratings[i,3] <- -1
+  }
+}
+head(binaryratings)
+```
+
+```{r}
+binaryratings2 <- dcast(binaryratings, movieId~userId, value.var = "rating", na.rm=FALSE)
+head(binaryratings2)
+```
+
+```{r}
+for (i in 1:ncol(binaryratings2)){
+  binaryratings2[which(is.na(binaryratings2[,i]) == TRUE),i] <- 0
+}
+binaryratings2 = binaryratings2[,-1]
+head(binaryratings2)
+```
+
+```{r}
+movieIds <- length(unique(movies$movieId))
+ratingmovieIds <- length(unique(ratings$movieId)) 
+```
+
+```{r}
+movies2 <- movies[-which((movies$movieId %in% ratings$movieId) == FALSE),]
+rownames(movies2) <- NULL
+head(movies2)
+```
+
+```{r}
+genre_matrix3 <- genre_matrix2[-which((movies$movieId %in% ratings$movieId) == FALSE),]
+rownames(genre_matrix3) <- NULL
+head(genre_matrix3)
+```
+
+```{r}
+result = matrix(0,18,610)
+for (c in 1:ncol(binaryratings2)){
+  for (i in 1:ncol(genre_matrix3)){
+    result[i,c] <- sum((genre_matrix3[,i]) * (binaryratings2[,c]))
+  }
+}
+```
+
+```{r}
+for (c in 1:ncol(result)){
+  for (i in 1:nrow(result)){
+    if (result[i,c] < 5){
+      result[i,c] <- 0
+    }
+    else {
+      result[i,c] <- 1
+    }
+  }
+}
+```
+
+```{r}
+result2 <- result[,5]
+head(result2)
+```
+```{r}
+sim_mat <- rbind.data.frame(result2, genre_matrix3)
+sim_mat <- data.frame(lapply(sim_mat,function(x){as.integer(x)}))
+head(sim_mat)
+```
+```{r}
+sim_results <- dist(sim_mat, method = "Jaccard")
+sim_results <- as.data.frame(as.matrix(sim_results[1:9724]))
+head(sim_results)
+```
+```{r}
+rows <- which(sim_results == min(sim_results))
+movies[rows,]
+```
+```{r}
+genre_count <- colSums(genre_matrix3)
+distrib <- data.frame(Genre=genre_list, Count=genre_count)
+rownames(distrib) <- NULL
+head(distrib)
+```
+```{r}
+ggplot(distrib, aes(x = Genre, y = Count)) +
+  geom_bar(stat="identity", fill = 'steelblue') +
+  geom_text(aes(label=Count), vjust=-0.3, size=3.5) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Genre Distribution in the Dataset")
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
